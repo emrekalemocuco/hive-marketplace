@@ -1,0 +1,8 @@
+{
+  "name": "hive-bugfix-plugin",
+  "description": "A plugin to fix bugs in Hive",
+  "version": "1.0.0",
+  "author": {
+    "name": "Emre Kalem"
+  }
+}

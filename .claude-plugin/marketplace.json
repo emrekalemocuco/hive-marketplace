@@ -1,0 +1,13 @@
+{
+  "name": "hive-marketplace",
+  "owner": {
+    "name": "Hive"
+  },
+  "plugins": [
+    {
+      "name": "hive-bugfix-plugin",
+      "source": "https://github.com/emrekalemocuco/hive-marketplace/bugfix-plugin",
+      "description": "Hive Plugin for Claude Code"
+    }
+  ]
+}
