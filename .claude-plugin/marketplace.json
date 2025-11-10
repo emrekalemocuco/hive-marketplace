@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "hive-bugfix-plugin",
-      "source": "https://github.com/emrekalemocuco/hive-marketplace/bugfix-plugin",
+      "source": "./bugfix-plugin",
       "description": "Hive Plugin for Claude Code"
     }
   ]
