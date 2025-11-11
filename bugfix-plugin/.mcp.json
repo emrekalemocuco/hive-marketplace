@@ -1,8 +1,0 @@
-{
-  "hive-mcp-plugin3": {
-    "type": "stdio",
-    "command": "cmd",
-    "args": ["/c", "npx", "github:ocuco/hive-mcp"],
-    "env": "${CLAUDE_PLUGIN_ROOT}/config.json"
-  }
-}
