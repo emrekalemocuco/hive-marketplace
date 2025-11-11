@@ -1,22 +1,20 @@
 {
-  "mcpServers": {
-    "hive-mcp-plugin": {
-      "type": "stdio",
-      "command": "cmd",
-      "args": [
-        "--config",
-        "${CLAUDE_PLUGIN_ROOT}/config.json",
-        "/c",
-        "npx",
-        "github:ocuco/hive-mcp"
-      ],
-      "env": {
-        "JIRA_BASE_URL": "${JIRA_BASE_URL}",
-        "JIRA_EMAIL": "${JIRA_EMAIL}",
-        "JIRA_API_TOKEN": "${JIRA_API_TOKEN}",
-        "SOURCEGRAPH_URL": "${SOURCEGRAPH_URL}",
-        "SOURCEGRAPH_TOKEN": "${SOURCEGRAPH_TOKEN}"
-      }
+  "hive-mcp-plugin": {
+    "type": "stdio",
+    "command": "cmd",
+    "args": [
+      "--config",
+      "${CLAUDE_PLUGIN_ROOT}/config.json",
+      "/c",
+      "npx",
+      "github:ocuco/hive-mcp"
+    ],
+    "env": {
+      "JIRA_BASE_URL": "${JIRA_BASE_URL}",
+      "JIRA_EMAIL": "${JIRA_EMAIL}",
+      "JIRA_API_TOKEN": "${JIRA_API_TOKEN}",
+      "SOURCEGRAPH_URL": "${SOURCEGRAPH_URL}",
+      "SOURCEGRAPH_TOKEN": "${SOURCEGRAPH_TOKEN}"
     }
   }
 }
