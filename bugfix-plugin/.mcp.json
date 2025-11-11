@@ -1,8 +1,9 @@
 {
   "mcpServers": {
-    "hive-mcp-plugin35": {
-      "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/servers/hive-mcp"],
+    "hive-mcp": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "github:ocuco/hive-mcp"],
       "env": {
         "JIRA_BASE_URL": "${JIRA_BASE_URL}",
         "JIRA_EMAIL": "${JIRA_EMAIL}",
