@@ -9,5 +9,9 @@
       "SOURCEGRAPH_URL": "${SOURCEGRAPH_URL}",
       "SOURCEGRAPH_TOKEN": "${SOURCEGRAPH_TOKEN}"
     }
+  },
+  "mcp-atlassian": {
+    "command": "npx",
+    "args": ["mcp-remote", "https://mcp.atlassian.com/v1/sse"]
   }
 }
