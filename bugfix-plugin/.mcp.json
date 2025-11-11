@@ -1,7 +1,14 @@
 {
   "hive-mcp-plugin": {
-    "command": "node",
-    "args": ["${CLAUDE_PLUGIN_ROOT}/servers/hive-mcp/dist/index.js"],
+    "type": "stdio",
+    "command": "cmd",
+    "args": [
+      "--config",
+      "${CLAUDE_PLUGIN_ROOT}/config.json",
+      "/c",
+      "npx",
+      "${CLAUDE_PLUGIN_ROOT}/servers/hive-mcp"
+    ],
     "env": {
       "JIRA_BASE_URL": "${JIRA_BASE_URL}",
       "JIRA_EMAIL": "${JIRA_EMAIL}",
@@ -9,9 +16,5 @@
       "SOURCEGRAPH_URL": "${SOURCEGRAPH_URL}",
       "SOURCEGRAPH_TOKEN": "${SOURCEGRAPH_TOKEN}"
     }
-  },
-  "mcp-atlassian": {
-    "command": "npx",
-    "args": ["mcp-remote", "https://mcp.atlassian.com/v1/sse"]
   }
 }
