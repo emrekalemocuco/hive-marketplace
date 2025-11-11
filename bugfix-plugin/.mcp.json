@@ -2,13 +2,7 @@
   "hive-mcp-plugin2": {
     "type": "stdio",
     "command": "cmd",
-    "args": [
-      "--config",
-      "${CLAUDE_PLUGIN_ROOT}/config.json",
-      "/c",
-      "npx",
-      "${CLAUDE_PLUGIN_ROOT}/servers/hive-mcp"
-    ],
+    "args": ["/c", "npx", "${CLAUDE_PLUGIN_ROOT}/servers/hive-mcp"],
     "env": {
       "JIRA_BASE_URL": "${JIRA_BASE_URL}",
       "JIRA_EMAIL": "${JIRA_EMAIL}",
