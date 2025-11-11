@@ -1,5 +1,5 @@
 {
-  "hive-mcp-plugin": {
+  "hive-mcp-plugin2": {
     "type": "stdio",
     "command": "cmd",
     "args": [
