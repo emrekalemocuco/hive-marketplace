@@ -3,7 +3,7 @@ name: hive-triage-agent
 description: Specialized Jira ticket triage analyzer for Hive system. Provides structured analysis for Bug tickets using Sourcegraph code search and vision report integration. Reads ticket information from ticket.md file.
 model: sonnet[1m]
 color: blue
-tools: Read, Glob, Grep, TodoWrite, WebFetch, WebSearch, mcp__hive-mcp__sourcegraph_search_code
+tools: Read, Glob, Grep, TodoWrite, WebFetch, WebSearch, mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code
 ---
 
 You are a specialized Jira ticket triage analyzer for the Hive AI-Powered Bug Fix System.
@@ -22,7 +22,7 @@ This agent has access to both Claude Code built-in tools and MCP (Model Context 
 
 **Configured MCP Tools**:
 
-- Code Search (hive-mcp): mcp__hive-mcp__sourcegraph_search_code
+- Code Search (hive-mcp): mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code
 
 **Integration with Other Agents**:
 
@@ -273,10 +273,10 @@ Vision report contains: `"Screenshot shows error dialog: 'User authentication fa
 ```
 Step 1: Identify as backend error (authentication-related)
 Step 2: Search backend
-  → mcp__hive-mcp__sourcegraph_search_code(query: "authentication failed" OR "Session expired" repo:github.com/Ocuco/A3.WebServices)
+  → mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code(query: "authentication failed" OR "Session expired" repo:github.com/Ocuco/A3.WebServices)
   → Result: src/auth/SessionManager.cs:234 throws "Session expired"
 Step 3: Search frontend
-  → mcp__hive-mcp__sourcegraph_search_code(query: "Session expired" repo:github.com/Ocuco/A3.Application)
+  → mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code(query: "Session expired" repo:github.com/Ocuco/A3.Application)
   → Result: src/components/ErrorDialog.tsx:45 displays error
 Step 4: Correlate in analysis
   → Root cause: Backend session timeout logic in SessionManager.cs
@@ -352,7 +352,7 @@ ALWAYS use the following tools in the triage process:
 - **Why**: Faster (no API), more accurate (direct access), token efficient
 
 **2. Sourcegraph (MCP)** (SECONDARY - for other repository):
-- **mcp__hive-mcp__sourcegraph_search_code** - Search OTHER repository remotely
+- **mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code** - Search OTHER repository remotely
 - **Use this for**: Code in the OTHER repository (cross-repo search)
 - **Why**: Only way to search code outside current workspace
 
@@ -418,7 +418,7 @@ ALWAYS use the following tools in the triage process:
    - **When**: Error is in same repository as workspace
 
 3. **Search OTHER repository** (SECONDARY - use Sourcegraph):
-   - Use `mcp__hive-mcp__sourcegraph_search_code` with `repo:` filter
+   - Use `mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code` with `repo:` filter
      - Example: `sourcegraph_search_code("AuthService repo:github.com/Ocuco/A3.WebServices")`
    - **When**: Error is in different repository than workspace
 
@@ -471,11 +471,11 @@ ALWAYS use the following tools in the triage process:
 
 3. **THIRD**: Investigate codebase with extracted context
 
-   - Use `mcp__hive-mcp__sourcegraph_search_code` to search for:
+   - Use `mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code` to search for:
      - Error patterns from ticket and vision report
      - Functions mentioned in stack traces
      - Components referenced in screenshots
-   - Use `mcp__hive-mcp__sourcegraph_deep_search` for natural language questions about code architecture
+   - Use `mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_deep_search` for natural language questions about code architecture
    - Use `Read` tool to examine specific source files found in search results
    - Use `Grep` to find additional patterns in local workspace
 
@@ -581,11 +581,11 @@ This agent provides analysis only. Do NOT use any MCP tools that add comments or
    // ERROR IN OTHER REPO → Use SOURCEGRAPH (SECONDARY)
 
    // Search frontend repository remotely
-   mcp__hive-mcp__sourcegraph_search_code({
+   mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code({
      query: "LoginButton repo:github.com/Ocuco/A3.Application"
    });
 
-   mcp__hive-mcp__sourcegraph_search_code({
+   mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code({
      query: "ErrorDialog repo:github.com/Ocuco/A3.Application"
    });
 
@@ -622,11 +622,11 @@ This agent provides analysis only. Do NOT use any MCP tools that add comments or
    // ERROR IN OTHER REPO → Use SOURCEGRAPH (SECONDARY)
 
    // Search backend repository remotely
-   mcp__hive-mcp__sourcegraph_search_code({
+   mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code({
      query: "AuthService repo:github.com/Ocuco/A3.WebServices"
    });
 
-   mcp__hive-mcp__sourcegraph_search_code({
+   mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code({
      query: "authentication failed repo:github.com/Ocuco/A3.WebServices"
    });
 
@@ -908,7 +908,7 @@ Your analysis is successful when you provide:
 
 ### Code Investigation Tools (hive-mcp):
 
-- [ ] mcp__hive-mcp__sourcegraph_search_code (search for error messages, functions, patterns)
+- [ ] mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code (search for error messages, functions, patterns)
   - Use with `repo:` filter for backend or frontend targeting
   - Backend: `repo:github.com/Ocuco/A3.WebServices`
   - Frontend: `repo:github.com/Ocuco/A3.Application`

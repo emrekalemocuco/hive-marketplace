@@ -121,9 +121,9 @@ Task:
   prompt: "Perform pure visual analysis of image attachments for Jira ticket: {{arg1}}
 
   TASK:
-  1. Use mcp__hive-mcp__jira_list_attachments to get all attachments
+  1. Use mcp__plugin_hive-bugfix-plugin_hive-mcp__jira_list_attachments to get all attachments
   2. Filter for image files (PNG, JPG, GIF, BMP, WebP)
-  3. Use mcp__hive-mcp__jira_read_attachment to read each image
+  3. Use mcp__plugin_hive-bugfix-plugin_hive-mcp__jira_read_attachment to read each image
   4. Analyze each image - describe what you see objectively:
      - UI elements, text, colors, layout
      - Positions, highlights, selections

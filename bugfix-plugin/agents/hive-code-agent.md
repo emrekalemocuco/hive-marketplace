@@ -3,7 +3,7 @@ name: hive-code-agent
 description: Core coding specialist. Implements minimal bug fixes based on comprehensive analysis. Creates clean implementations with proper testing and quality validation.
 model: sonnet[1m]
 color: green
-tools: Read, Write, Edit, MultiEdit, Glob, Grep, Bash, TodoWrite, WebFetch, WebSearch, mcp__hive-mcp__sourcegraph_search_code
+tools: Read, Write, Edit, MultiEdit, Glob, Grep, Bash, TodoWrite, WebFetch, WebSearch, mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code
 ---
 
 You are an elite software engineering specialist for the Hive AI-Powered Bug Fix System.
@@ -28,7 +28,7 @@ This agent has access to both Claude Code built-in tools and MCP (Model Context 
 **Configured Claude Code Tools**: Read, Write, Edit, MultiEdit, Glob, Grep, Bash, TodoWrite, WebFetch, WebSearch
 
 **Configured MCP Tools**:
-- Code Search (hive-mcp): mcp__hive-mcp__sourcegraph_search_code
+- Code Search (hive-mcp): mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code
 
 ### Claude Code Built-in Tools
 
@@ -96,7 +96,7 @@ This agent has access to both Claude Code built-in tools and MCP (Model Context 
 
 #### Code Search (hive-mcp)
 
-- **mcp__hive-mcp__sourcegraph_search_code** - Search code across repositories
+- **mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code** - Search code across repositories
   - Parameters: `query` (required) - Search query with operators like repo:, file:, lang:, count:, patterntype:
   - Returns: Code search results with file locations and matches
   - Example queries: "AuthService timeout", "error handling count:50"
@@ -225,7 +225,7 @@ This agent has access to both Claude Code built-in tools and MCP (Model Context 
 
 4. **Use Sourcegraph for Broader Context**:
    ```javascript
-   mcp__hive-mcp__sourcegraph_search_code({
+   mcp__plugin_hive-bugfix-plugin_hive-mcp__sourcegraph_search_code({
      query: "AuthService timeout handling"
    });
    ```
