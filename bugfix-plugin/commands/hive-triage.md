@@ -26,6 +26,29 @@ I'll orchestrate a comprehensive triage analysis for you, coordinating specializ
 
 ---
 
+## 🔄 IMPORTANT: Automated Workflow Execution
+
+This command executes **Steps 0-5 automatically without stopping**:
+- Step 0: Input Validation
+- Step 1: Jira Validation Agent
+- Step 2: Vision Agent (if images exist)
+- Step 3: Triage Agent
+- Step 4: Orchestrator Senior Review ← You perform this
+- Step 4.5: Classification Skill Invocation ← You invoke this
+- Step 5: Report Generation ← You generate reports
+
+**⚠️ CRITICAL: Do NOT pause between steps!**
+
+- ❌ Do NOT wait for user confirmation after senior review
+- ❌ Do NOT wait for user confirmation after classification
+- ❌ Do NOT pause between any intermediate steps
+- ✅ **ONLY pause at Step 6** to ask user about code implementation
+
+**Execute the entire workflow (Steps 0-5) in one continuous flow.**
+**Stop ONLY at Step 6 for user interaction.**
+
+---
+
 **ARCHITECTURE**: This command uses orchestrator pattern with specialized sub-agents to maintain context efficiency.
 
 ---
@@ -54,7 +77,7 @@ if "{{arg1}}" is empty or undefined:
 ## Step 1: Jira Ticket Validation & Data Collection 🔍
 **Use specialized agent for validation and ticket.md creation:**
 
-Use the **Task** tool to launch the **hive-jira-validation-agent**:
+Use the **Task** tool to launch the **hive-bugfix-plugin:hive-jira-validation-agent**:
 ```
 Task:
   subagent_type: "hive-jira-validation-agent"
@@ -98,8 +121,103 @@ Task:
    - Exit command
 
 2. If `validationStatus === "success"`:
-   - ✅ Continue to next step
+   - ✅ Continue to Step 1.5 (Non-Bug Ticket Check)
    - Save validation result for later use
+
+---
+
+## Step 1.5: Non-Bug Ticket Warning & User Confirmation ⚠️
+
+**Purpose**: If ticket is not a Bug type, inform user and get confirmation to proceed.
+
+### Check Ticket Type:
+
+Parse the validation result from Step 1 and check `isValidType` field:
+
+```javascript
+const validation = {validation result from Step 1};
+
+if (validation.isValidType === false) {
+  // Non-bug ticket detected - warn user and ask for confirmation
+
+  // 1. Display Warning
+  console.log(`
+    ⚠️ TICKET TYPE WARNING
+
+    Ticket: ${validation.ticketId}
+    Type: ${validation.ticketType} (Not a Bug)
+
+    ${validation.warningMessage}
+
+    **Important**: Hive is optimized for Bug ticket analysis.
+    Analyzing a ${validation.ticketType} ticket may produce less relevant or optimal results.
+
+    Common non-bug types:
+    - Story: Feature requests or user stories
+    - Task: General work items or chores
+    - Epic: Large initiatives (too broad for detailed triage)
+    - Sub-task: Part of a larger ticket
+  `);
+
+  // 2. Ask User for Confirmation
+  AskUserQuestion({
+    questions: [{
+      question: `This is a ${validation.ticketType} ticket, not a Bug. Would you like to proceed with analysis anyway?`,
+      header: "Non-Bug Ticket",
+      multiSelect: false,
+      options: [
+        {
+          label: "Yes, proceed with analysis",
+          description: `Continue triage analysis for this ${validation.ticketType}. Hive will do its best, but results may be less optimal than for Bug tickets.`
+        },
+        {
+          label: "No, stop here",
+          description: "Stop the workflow. Use Hive with Bug tickets for best results."
+        }
+      ]
+    }]
+  });
+
+  // 3. Process User Response
+  {User will select an option}
+
+  if (userSelection === "Yes, proceed with analysis") {
+    // User confirmed - continue workflow
+    console.log(`✓ User confirmed - proceeding with ${validation.ticketType} analysis...`);
+    console.log(`⚠️ Note: Results may differ from typical Bug analysis.`);
+    // → Continue to Step 2 (Vision Analysis)
+  }
+
+  if (userSelection === "No, stop here") {
+    // User declined - graceful exit
+    console.log(`
+      ✅ Workflow stopped at user request.
+
+      💡 **Tip**: Hive provides best results with Bug tickets.
+
+      If you have a Bug ticket to analyze, run:
+      /hive-triage <bug-ticket-id>
+    `);
+    // → Exit workflow gracefully
+    return;
+  }
+}
+
+// If isValidType === true (Bug ticket):
+// → Skip this entire step, continue directly to Step 2
+```
+
+### Sequential Checkpoint:
+
+```
+✅ Checkpoint: Ticket type validated
+   - Bug ticket: Proceed automatically (no prompt)
+   - Non-bug ticket: User confirmation obtained or workflow stopped
+
+→ Continue to Step 2 (Vision Analysis)
+```
+
+---
 
 ## Step 2: Vision Analysis (Conditional) 🖼️
 **Use specialized vision agent for image attachment analysis:**
@@ -113,10 +231,10 @@ else:
 ```
 
 ### 2.2 Launch Vision Agent (If Images Exist):
-**Use Task tool to launch hive-vision-agent:**
+**Use Task tool to launch hive-bugfix-plugin:hive-vision-agent:**
 ```
 Task:
-  subagent_type: "hive-vision-agent"
+  subagent_type: "hive-bugfix-plugin:hive-vision-agent"
   description: "Analyze image attachments for {{arg1}}"
   prompt: "Perform pure visual analysis of image attachments for Jira ticket: {{arg1}}
 
@@ -172,7 +290,7 @@ Task:
 ## Step 3: Triage Analysis 🔬
 **Use specialized agent for code investigation and analysis:**
 
-Use the **Task** tool to launch the **hive-triage-agent**:
+Use the **Task** tool to launch the **hive-bugfix-plugin:hive-triage-agent**:
 ```
 Task:
   subagent_type: "hive-triage-agent"
@@ -368,9 +486,139 @@ git log -p -n 5 -- <affected_file>
 }
 ```
 
+**3.5. Linked Issues Investigation (Optional - On-Demand)**
+
+**Purpose**: If triage analysis feels insufficient or unclear, investigate linked/mentioned tickets for additional context.
+
+**Decision Criteria** (Use professional judgment):
+- ❓ Is root cause unclear from main ticket alone?
+- ❓ Do linked issues have relevant context? (especially "Blocks", "Is Blocked By", "Causes")
+- ❓ Are there unresolved questions that related tickets might answer?
+- ❓ Does triage agent's analysis mention linked issues as potentially relevant?
+
+**If YES - Linked issues investigation needed:**
+
+**Step 3.5.1: Read Related Tickets**:
+```javascript
+// Read ticket.md to get linked/mentioned tickets
+const ticketData = await Read({
+  file_path: `.hive/reports/{ticketId}/ticket.md`
+});
+
+// Parse "Related Tickets" section
+// Extract: linkedIssues array, mentionedTickets array
+```
+
+**Step 3.5.2: Prioritize Related Tickets**:
+```javascript
+// Prioritize by relationship type:
+Priority 1: "Blocks", "Is Blocked By", "Causes", "Is Caused By"
+Priority 2: "Duplicates", "Is Duplicated By"
+Priority 3: "Relates To"
+
+// Focus on 1-3 most relevant linked issues (token efficiency)
+```
+
+**Step 3.5.3: Check for Images**:
+```javascript
+// For each prioritized linked issue:
+for (const linkedIssue of topPriorityLinkedIssues) {
+  // Check if linked issue has images
+  const linkedAttachments = await mcp__plugin_hive-bugfix-plugin_hive-mcp__jira_list_attachments({
+    issueIdOrKey: linkedIssue.key
+  });
+
+  const linkedImages = linkedAttachments.filter(att =>
+    att.mimeType.startsWith('image/')
+  );
+
+  if (linkedImages.length > 0) {
+    // This linked issue has images - might be valuable
+    linkedIssuesWithImages.push({
+      ...linkedIssue,
+      imageCount: linkedImages.length
+    });
+  }
+}
+```
+
+**Step 3.5.4: Invoke Vision Agent (Append Mode)**:
+
+**Only if** linked issue has valuable context AND images:
+
+```javascript
+// Invoke vision agent for linked issue
+Task({
+  subagent_type: "hive-vision-agent",
+  description: `Analyze images from linked issue ${linkedIssue.key}`,
+  prompt: `Analyze image attachments for linked issue: ${linkedIssue.key}
+
+  Main ticket: {mainTicketId}
+  Relationship: "${linkedIssue.linkType} - ${linkedIssue.relationship}"
+  Append to existing vision report: true
+
+  Analyze all images from ${linkedIssue.key} and append results to existing vision.md.
+  Include relationship context in the section header.
+  `
+});
+
+// Wait for vision.md update to complete
+// Vision agent will append new section to existing vision.md
+```
+
+**Step 3.5.5: Re-read Vision Report**:
+```javascript
+// Read updated vision.md with linked issue context
+const updatedVisionReport = await Read({
+  file_path: `.hive/reports/{ticketId}/vision.md`
+});
+
+// Now have additional visual context from linked issues
+// Use this in enhanced analysis
+```
+
+**Step 3.5.6: Enhance Analysis with Linked Issue Insights**:
+```javascript
+// Add to orchestratorReview.additionalFindings:
+additionalFindings.push(
+  `Analyzed linked issue ${linkedIssue.key} (${linkedIssue.linkType})`,
+  `Found ${imageCount} additional images showing: {brief summary}`,
+  `Linked issue context: {relevant insights}`
+);
+```
+
+**Example Scenario**:
+```
+Triage finding: "Auth timeout happening, unclear why"
+
+Step 3.5 Investigation:
+  → Read ticket.md, found linked issues:
+     - ACPC-123 (Is Blocked By): "Auth service performance degradation"
+     - ACPC-456 (Relates To): "Timeout configuration update"
+
+  → ACPC-123 has relationship "Is Blocked By" (high priority)
+  → Check ACPC-123 for images: Found 3 images (performance charts)
+
+  → Decision: Analyze ACPC-123 images (might explain why auth is timing out)
+
+  → Invoke vision agent (append mode):
+     - Analyzes ACPC-123 images
+     - Appends to vision.md under "Linked Issue: ACPC-123" section
+
+  → Re-read vision.md
+  → Enhanced finding: "Auth timeout caused by performance degradation in ACPC-123 (CPU spikes shown in performance charts)"
+```
+
+**If NO - Skip linked issues investigation:**
+- Triage analysis is sufficient
+- No linked issues with relevant context
+- Token efficiency (don't waste on unrelated links)
+
+---
+
 **4. Final Enhanced Analysis**
 
-Return the enhanced/corrected analysis for report generation in Step 5.
+Return the enhanced/corrected analysis (possibly with linked issue insights) for report generation in Step 5.
 
 ### Review Tools Available:
 
@@ -402,8 +650,179 @@ Return the enhanced/corrected analysis for report generation in Step 5.
    - Agent analysis validated/enhanced
    - Alternative causes investigated
    - Corrections documented
-   - Ready to generate final report (Step 5)
+   → Continuing immediately to classification (Step 4.5)
+
+⚠️ DO NOT PAUSE - Proceed automatically to Step 4.5 (Classification)
 ```
+
+---
+
+## Step 4.5: Issue Classification (via Classification Skill) 🔍
+
+**Purpose**: Classify the issue type based on triage findings to determine if it's a code bug, configuration issue, infrastructure problem, or other category.
+
+### Process:
+
+**1. Prepare Context for Classification Skill**
+
+The enhanced triage analysis from Step 4 is now available. Context includes:
+- Ticket details (from `.hive/reports/{ticketId}/ticket.md`)
+- Vision analysis (from `.hive/reports/{ticketId}/vision.md` if exists)
+- Triage analysis with orchestrator enhancements
+- Root cause identified
+- Error patterns and messages
+- Code analysis findings
+- Environment clues
+
+**2. Invoke Classification Skill**
+
+Use the Skill tool to explicitly invoke the `hive-classification` skill:
+
+```markdown
+I need to classify this issue based on the triage findings.
+
+**Triage Summary**:
+- Ticket ID: {ticketId}
+- Root Cause: {analysis.rootCause}
+- Affected Files: {codeAnalysis.affectedFiles}
+- Error Patterns: {codeAnalysis.errorPatterns}
+- Severity: {analysis.severity}
+
+**Evidence from Investigation**:
+- Symptoms: {from ticket and vision}
+- Error messages: {from logs, screenshots}
+- Environment behavior: {works in dev? fails in prod?}
+- Recent changes: {deployments, config changes}
+- Code findings: {what code analysis revealed}
+
+Please classify this issue and generate diagnostic checklist if applicable.
+```
+
+The skill will return a **Markdown report** (not JSON).
+
+**3. Save Classification Report**
+
+Take the markdown output from the skill and save it to:
+`.hive/reports/{ticketId}/classification.md`
+
+Use the Write tool:
+```
+Write({
+  file_path: `.hive/reports/{ticketId}/classification.md`,
+  content: {markdown output from classification skill}
+})
+```
+
+**4. Parse Classification Metadata**
+
+Read the classification.md file and extract key metadata for orchestration:
+
+Parse these values from the markdown:
+- **Primary Category**: Extract from line "**Category**: {value}"
+- **Confidence**: Extract from line "**Confidence**: {value}"
+- **Secondary Category**: Extract from line "**Secondary Category**: {value}" (if exists)
+
+Store this metadata in `issueClassification` object:
+```json
+{
+  "primaryCategory": "Configuration Issue",
+  "confidence": "High",
+  "confidenceScore": 92,
+  "hasDiagnosticChecklist": true,
+  "reportPath": ".hive/reports/{ticketId}/classification.md"
+}
+```
+
+**Parsing Example**:
+```
+From markdown line: "**Category**: Configuration Issue"
+Extract: primaryCategory = "Configuration Issue"
+
+From markdown line: "**Confidence**: High (92%)"
+Extract: confidence = "High", confidenceScore = 92
+```
+
+This metadata will be used in:
+- **Step 6**: Dynamic user prompt (determine which scenario based on primaryCategory)
+- **Step 5**: Triage report (reference classification.md file)
+
+**5. Validate Classification**
+
+Quick validation checks on parsed metadata:
+- Does primaryCategory match root cause analysis?
+- Is confidence level reasonable given evidence?
+- If confidence is Low (<50%), flag for manual review
+- If Hybrid, verify both categories are legitimate
+
+**6. Add Classification Metadata to Analysis**
+
+Add parsed classification metadata to the enhanced analysis structure:
+```json
+{
+  ...enhancedTriageAnalysis,
+  "issueClassification": {
+    "primaryCategory": "{parsed from classification.md}",
+    "confidence": "{parsed from classification.md}",
+    "confidenceScore": {parsed from classification.md},
+    "secondaryCategory": "{parsed if exists}",
+    "hasDiagnosticChecklist": true/false,
+    "reportPath": ".hive/reports/{ticketId}/classification.md",
+    "classificationDate": "{current_timestamp}",
+    "classifiedBy": "hive-classification-skill"
+  }
+}
+```
+
+**Note**: The full classification report is saved as a separate file (classification.md).
+Only metadata is stored in the analysis object for orchestration purposes.
+
+### Classification Categories Overview:
+
+| Category | Typical Indicators | Diagnostic Checklist? |
+|----------|-------------------|----------------------|
+| **Code Bug** | Logic error, null pointer, algorithm bug | No (code fix needed) |
+| **Configuration Issue** | Missing env var, wrong config, API key | Yes (5-8 steps) |
+| **Infrastructure Issue** | Deployment, network, permissions, resources | Yes (5-8 steps) |
+| **Data Issue** | Wrong/missing DB data, corruption | Yes (5-8 steps) |
+| **External Service Issue** | Third-party API down, rate limits | Yes (5-8 steps) |
+| **Hybrid** | Multiple categories combined | Yes (for non-code parts) |
+| **Insufficient Evidence** | Unclear, needs more investigation | Yes (investigation steps) |
+
+### Diagnostic Checklist Benefits:
+
+For non-code issues (Configuration, Infrastructure, Data, External Service):
+- ✅ **Ticket-specific steps**: Uses actual names from triage (env vars, files, APIs)
+- ✅ **Executable commands**: Developer can copy-paste and run
+- ✅ **Prioritized**: Critical → High → Medium → Low
+- ✅ **Actionable**: No generic placeholders or guessing
+
+**Example Diagnostic Checklist** (Configuration Issue - Google Maps API):
+```
+1. [Critical] Verify GOOGLE_MAPS_API_KEY exists in production
+   → echo $GOOGLE_MAPS_API_KEY
+2. [Critical] Check API key permissions in Google Cloud Console
+   → Navigate to APIs & Services, verify Maps JavaScript API enabled
+3. [High] Verify domain restrictions allow production domain
+   → Check HTTP referrers whitelist includes yourapp.com
+4. [High] Check API quota usage and billing status
+   → Dashboard shows <100% quota, billing active
+5. [Medium] Compare dev vs prod configuration
+   → diff .env.development .env.production
+```
+
+### Sequential Checkpoint:
+
+```
+✅ Checkpoint: Issue classification complete
+   - Classification determined: {primaryCategory}
+   - Confidence: {confidence} ({confidenceScore}%)
+   - Diagnostic checklist generated (if applicable)
+   → Continuing immediately to report generation (Step 5)
+
+⚠️ DO NOT PAUSE - Proceed automatically to Step 5 (Report Generation)
+```
+
+---
 
 ## Step 5: Generate Triage Report 📄
 **Orchestrator generates final report from enhanced analysis:**
@@ -496,6 +915,48 @@ Return the enhanced/corrected analysis for report generation in Step 5.
 
 ---
 
+{if issueClassification:}
+## 🔍 Issue Classification
+
+📄 **Full Classification Report**: [classification.md](classification.md)
+
+### Quick Summary
+
+- **Category**: {issueClassification.primaryCategory}
+{if issueClassification.secondaryCategory:}- **Secondary Category**: {issueClassification.secondaryCategory}
+- **Confidence**: {issueClassification.confidence} ({issueClassification.confidenceScore}%)
+- **Diagnostic Checklist Available**: {issueClassification.hasDiagnosticChecklist ? 'Yes ✅' : 'No (code fix needed)'}
+
+### What This Means
+
+{if issueClassification.primaryCategory in ["Configuration Issue", "Infrastructure Issue", "Data Issue", "External Service Issue"]:}
+This appears to be a **{issueClassification.primaryCategory}** rather than a code bug.
+
+✅ **Action Required**: Review the diagnostic checklist in `classification.md` to verify and fix the root cause.
+
+💡 **Recommended**: Fix the {issueClassification.primaryCategory} first. Code changes may not be necessary for the root cause, but defensive improvements can be added optionally.
+
+{else if issueClassification.primaryCategory === "Code Bug":}
+This is a **Code Bug** requiring code changes to fix.
+
+✅ **Action Required**: Implement code fix based on root cause analysis and recommendations below.
+
+{else if issueClassification.primaryCategory === "Hybrid":}
+This is a **Hybrid Issue** requiring both configuration/infrastructure fixes AND code improvements.
+
+✅ **Action Required**:
+1. First, address the non-code aspects using the diagnostic checklist in `classification.md`
+2. Then, implement code improvements for better handling and error prevention
+
+{else if issueClassification.primaryCategory === "Insufficient Evidence":}
+⚠️ **Warning**: Classification confidence is low. More investigation may be needed.
+
+✅ **Action Required**: Review investigation steps in `classification.md` to gather more information.
+
+For detailed classification analysis, evidence breakdown, and diagnostic steps, see: **[classification.md](classification.md)**
+
+---
+
 ## 💡 Recommendations
 
 ### ⚡ Immediate Actions
@@ -577,68 +1038,250 @@ This comprehensive analysis provides a systematic evaluation of the reported iss
    - Example: `.hive/reports/HIVE-123/triage_2024-09-26.md`
    - Format: triage_YYYY-MM-DD.md (override if any triage_*.md exists)
 
-## Step 6: Interactive Code Fix Prompt 🤔
+## Step 6: Classification-Based Interactive Prompt 🤔
 
-**ONLY if triage analysis was successful:**
+**ONLY if triage analysis and classification were successful:**
 
-**Purpose**: Give user control - ask if they want automatic code implementation
+**Purpose**: Present classification-aware options based on issue type
 
-**Display Triage Summary First**:
+### Dynamic Prompt Logic:
+
+The prompt varies based on `issueClassification.primaryCategory`:
+
+---
+
+### **Scenario A: Configuration/Infrastructure/Data/External Service Issue**
+
+**If primaryCategory is one of**: `"Configuration Issue"`, `"Infrastructure Issue"`, `"Data Issue"`, `"External Service Issue"`
+
+**Display**:
 ```
 ✅ Triage Analysis Complete!
 
-📋 Summary:
-- Root Cause: {brief root cause from analysis}
-- Affected Files: {list of files}
-- Estimated Effort: {story points} SP / {time estimate}
-- Confidence: {confidence level}
+🔍 Classification: {issueClassification.primaryCategory} ({issueClassification.confidence} Confidence {issueClassification.confidenceScore}%)
+📋 Root Cause: {analysis.rootCause}
 
-📄 Full Report: .hive/reports/{{arg1}}/triage_{date}.md
+🛠️ DIAGNOSTIC CHECKLIST AVAILABLE
+
+I've generated {issueClassification.diagnosticChecklist.length} ticket-specific diagnostic steps to verify and fix the {issueClassification.primaryCategory}.
+
+Top Priority Checks:
+{for each item in diagnosticChecklist where priority === "Critical", max 3:}
+  ✓ {item.step}
+
+📄 See full diagnostic checklist in: .hive/reports/{{arg1}}/triage_{date}.md
+
+💡 {issueClassification.recommendedApproach}
 ```
 
-**Then Ask User**:
-
-Use the **AskUserQuestion** tool to prompt the user:
-
+**Ask User**:
 ```javascript
 AskUserQuestion({
   questions: [{
-    question: "Would you like me to implement the bug fix automatically based on this analysis?",
-    header: "Code Fix",
+    question: "Would you also like me to implement defensive code improvements? (Better error handling, validation, graceful degradation)",
+    header: "Code Improvements",
     multiSelect: false,
     options: [
       {
-        label: "Yes, implement the fix now",
-        description: "I'll use hive-code-agent to implement the fix based on triage analysis. You can review changes after."
+        label: "Yes, add defensive improvements",
+        description: "Implement code improvements to handle this scenario gracefully (e.g., better error messages, validation, fallbacks)."
       },
       {
-        label: "No, just the analysis is enough",
-        description: "Stop here. I'll review the triage report and decide later."
+        label: "No, diagnostic checklist is sufficient",
+        description: "Focus on fixing the configuration/infrastructure issue. No code changes needed."
       }
     ]
   }]
 });
 ```
 
-**Process User Response:**
+**Process Response**:
+- **If "Yes, add defensive improvements"**: → Proceed to Step 7 (Code Agent with defensive mode)
+- **If "No, checklist is sufficient"**: → Skip to Step 9 (Completion)
 
-1. **If user selects "Yes, implement the fix now"**:
-   ```
-   → Proceed to Step 7 (Code Implementation)
-   ```
+---
 
-2. **If user selects "No, just the analysis is enough"**:
-   ```
-   → Skip Steps 7-8
-   → Jump directly to Step 9 (Final Completion)
-   → Display: "✅ Triage complete. Report saved. You can run /hive-code {{arg1}} later if you want to implement the fix."
-   ```
+### **Scenario B: Code Bug**
+
+**If primaryCategory is**: `"Code Bug"`
+
+**Display**:
+```
+✅ Triage Analysis Complete!
+
+🔍 Classification: Code Bug ({issueClassification.confidence} Confidence {issueClassification.confidenceScore}%)
+📋 Root Cause: {analysis.rootCause}
+📂 Affected Files: {codeAnalysis.affectedFiles.join(', ')}
+
+💡 {issueClassification.recommendedApproach}
+
+📄 Full Report: .hive/reports/{{arg1}}/triage_{date}.md
+```
+
+**Ask User**:
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "Would you like me to implement the bug fix automatically?",
+    header: "Code Fix",
+    multiSelect: false,
+    options: [
+      {
+        label: "Yes, implement fix now",
+        description: "I'll use hive-code-agent to implement the bug fix based on triage analysis."
+      },
+      {
+        label: "No, analysis only",
+        description: "Stop here. I'll review the triage report and implement manually."
+      }
+    ]
+  }]
+});
+```
+
+**Process Response**:
+- **If "Yes, implement fix now"**: → Proceed to Step 7 (Code Agent with fix mode)
+- **If "No, analysis only"**: → Skip to Step 9 (Completion)
+
+---
+
+### **Scenario C: Hybrid Issue**
+
+**If primaryCategory is**: `"Hybrid"`
+
+**Display**:
+```
+✅ Triage Analysis Complete!
+
+🔍 Classification: Hybrid Issue
+   Primary: {issueClassification.primaryCategory}
+   Secondary: {issueClassification.secondaryCategory}
+   Confidence: {issueClassification.confidence} ({issueClassification.confidenceScore}%)
+
+📋 Root Cause: {analysis.rootCause}
+
+🎯 MULTI-PHASE APPROACH RECOMMENDED
+
+This issue requires addressing both:
+1. {issueClassification.primaryCategory} - Diagnostic checklist provided ({issueClassification.diagnosticChecklist.length} steps)
+2. {issueClassification.secondaryCategory} - Code improvements needed
+
+💡 {issueClassification.recommendedApproach}
+
+📄 Full analysis: .hive/reports/{{arg1}}/triage_{date}.md
+```
+
+**Ask User**:
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "This is a hybrid issue requiring multiple fixes. What would you like to do?",
+    header: "Approach",
+    multiSelect: false,
+    options: [
+      {
+        label: `Fix ${issueClassification.primaryCategory} first`,
+        description: "Focus on diagnostic checklist for configuration/infrastructure issue first."
+      },
+      {
+        label: `Implement code improvements`,
+        description: "Focus on code changes to address code-related aspects."
+      },
+      {
+        label: "Both (checklist + code)",
+        description: "I'll provide checklist AND implement code improvements (recommended)."
+      },
+      {
+        label: "Neither (analysis only)",
+        description: "Stop here. I'll handle fixes manually."
+      }
+    ]
+  }]
+});
+```
+
+**Process Response**:
+- **If "Fix {primaryCategory} first"**: → Display expanded checklist → Skip to Step 9
+- **If "Implement code improvements"**: → Proceed to Step 7 (Code Agent)
+- **If "Both"**: → Display checklist + Proceed to Step 7 (Code Agent)
+- **If "Neither"**: → Skip to Step 9 (Completion)
+
+---
+
+### **Scenario D: Insufficient Evidence**
+
+**If primaryCategory is**: `"Insufficient Evidence"`
+
+**Display**:
+```
+⚠️ Triage Analysis Complete (with uncertainty)
+
+🔍 Classification: Insufficient Evidence (Low Confidence {issueClassification.confidenceScore}%)
+📋 Findings: {issueClassification.reasoning}
+
+🤔 DEEPER INVESTIGATION RECOMMENDED
+
+The current evidence is not conclusive. Recommended next steps:
+{issueClassification.recommendedApproach}
+
+📄 Report: .hive/reports/{{arg1}}/triage_{date}.md
+```
+
+**Ask User**:
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "The classification is uncertain. How would you like to proceed?",
+    header: "Next Steps",
+    multiSelect: false,
+    options: [
+      {
+        label: "Perform deeper investigation",
+        description: "Continue investigating to gather more evidence before deciding on fix approach."
+      },
+      {
+        label: "Proceed with best guess",
+        description: "Implement fix based on most likely hypothesis despite uncertainty."
+      },
+      {
+        label: "Manual investigation needed",
+        description: "Stop here. This requires human analysis."
+      }
+    ]
+  }]
+});
+```
+
+**Process Response**:
+- **If "Perform deeper investigation"**: → Return to Step 3 (more triage analysis)
+- **If "Proceed with best guess"**: → Proceed to Step 7 (Code Agent with caution)
+- **If "Manual investigation needed"**: → Skip to Step 9 (Completion)
+
+---
+
+### Implementation Notes:
+
+**Context Awareness**:
+- Classification result is available in `issueClassification` object
+- Use `primaryCategory` to determine which scenario applies
+- Include confidence score in all displays for transparency
+
+**User Experience**:
+- Always show brief summary first
+- Make classification visible (users understand issue type)
+- Provide context-appropriate options
+- Include report file path for reference
+
+**Error Handling**:
+- If classification is missing → Fall back to Scenario B (Code Bug - original behavior)
+- If classification fails → Log warning, proceed with default prompt
 
 **Sequential Checkpoint:**
 ```
 ✅ Checkpoint: User decision captured
-   - If YES → Continue to code implementation (Step 7)
-   - If NO → Skip to final completion (Step 9)
+   - Classification-based prompt shown
+   - User selection recorded
+   - Next action determined (Code Agent / Completion / Further Investigation)
 ```
 
 ## Step 7: Code Implementation (Conditional) 🛠️
@@ -647,7 +1290,7 @@ AskUserQuestion({
 
 **Use specialized agent for bug fix implementation:**
 
-Use the **Task** tool to launch the **hive-code-agent**:
+Use the **Task** tool to launch the **hive-bugfix-plugin:hive-code-agent**:
 ```
 Task:
   subagent_type: "hive-code-agent"

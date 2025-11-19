@@ -258,6 +258,152 @@ Check the following:
 
    **Note**: Use this logic as guidance. Parse the Jira response carefully and handle all edge cases.
 
+---
+
+### Step 2.5: Fetch Linked Issues & Parse Ticket Mentions 🔗
+
+**Purpose**: Discover all related tickets (formally linked + mentioned in text) for comprehensive context.
+
+#### Part A: Fetch Formally Linked Issues
+
+**1. Get Linked Issues from Jira**:
+
+Linked issues are available in the `issuelinks` field:
+
+```javascript
+// Fetch issuelinks field
+const linkedData = await mcp__plugin_hive-bugfix-plugin_hive-mcp__jira_get_issue({
+  issueIdOrKey: ticketId,
+  field: 'issuelinks'
+});
+
+// Parse issuelinks array
+const linkedIssues = [];
+
+if (linkedData.fields && linkedData.fields.issuelinks) {
+  for (const link of linkedData.fields.issuelinks) {
+    // Jira issuelinks have two formats:
+    // - Outward link: { type: {...}, outwardIssue: {...} }
+    // - Inward link: { type: {...}, inwardIssue: {...} }
+
+    const linkType = link.type.name; // e.g., "Blocks", "Relates"
+    const linkedIssue = link.outwardIssue || link.inwardIssue;
+
+    if (linkedIssue) {
+      linkedIssues.push({
+        key: linkedIssue.key,
+        summary: linkedIssue.fields.summary,
+        status: linkedIssue.fields.status.name,
+        type: linkedIssue.fields.issuetype.name,
+        priority: linkedIssue.fields.priority?.name || 'None',
+        linkType: link.outwardIssue ? linkType : `Is ${linkType}`,
+        relationship: link.type.outward || link.type.inward
+      });
+    }
+  }
+}
+```
+
+**2. Filter by Relationship Type**:
+
+Include these link types:
+- ✅ Blocks / Is Blocked By
+- ✅ Duplicates / Is Duplicated By
+- ✅ Relates To
+- ✅ Causes / Is Caused By
+- ✅ Cloners (if present)
+
+**3. Store Results**:
+```javascript
+const linkedIssuesCount = linkedIssues.length;
+```
+
+---
+
+#### Part B: Parse Ticket Mentions from Text
+
+**1. Extract Ticket IDs from Description & Comments**:
+
+**Regex Pattern**: `/\b([A-Z]+-\d+)\b/g`
+
+```javascript
+const mentionedTicketIds = new Set();
+
+// Parse description
+if (description && description.content) {
+  const matches = description.content.match(/\b([A-Z]+-\d+)\b/g);
+  if (matches) {
+    matches.forEach(id => mentionedTicketIds.add(id));
+  }
+}
+
+// Parse comments
+if (comments && comments.comments) {
+  comments.comments.forEach((comment, index) => {
+    if (comment.body) {
+      const matches = comment.body.match(/\b([A-Z]+-\d+)\b/g);
+      if (matches) {
+        matches.forEach(id => {
+          mentionedTicketIds.add(id);
+          // Track where it was mentioned
+          mentionLocations[id] = mentionLocations[id] || [];
+          mentionLocations[id].push(`comment-${index + 1}`);
+        });
+      }
+    }
+  });
+}
+
+// De-duplicate: Remove main ticket ID and already linked issues
+mentionedTicketIds.delete(ticketId); // Remove self-reference
+linkedIssues.forEach(linked => mentionedTicketIds.delete(linked.key));
+```
+
+**2. Fetch Metadata for Mentioned Tickets**:
+
+```javascript
+const mentionedTickets = [];
+
+for (const mentionedId of mentionedTicketIds) {
+  try {
+    const mentionedTicket = await mcp__plugin_hive-bugfix-plugin_hive-mcp__jira_get_issue({
+      issueIdOrKey: mentionedId
+    });
+
+    mentionedTickets.push({
+      key: mentionedId,
+      summary: mentionedTicket.fields.summary,
+      status: mentionedTicket.fields.status.name,
+      type: mentionedTicket.fields.issuetype.name,
+      priority: mentionedTicket.fields.priority?.name || 'None',
+      mentionedIn: mentionLocations[mentionedId].join(', '),
+      mentionContext: extractMentionContext(description, comments, mentionedId)
+    });
+  } catch (error) {
+    // If ticket doesn't exist or is inaccessible, skip it
+    console.log(`Warning: Could not fetch mentioned ticket ${mentionedId}`);
+  }
+}
+```
+
+**3. Extract Mention Context** (snippet of text around mention):
+
+```javascript
+function extractMentionContext(description, comments, ticketId) {
+  // Find first occurrence in description or comments
+  // Return 100 chars before and after the mention
+  // Example: "...related to ACPC-456 where we changed timeout..."
+}
+```
+
+**4. Store Results**:
+```javascript
+const mentionedTicketsCount = mentionedTickets.length;
+const totalRelatedTickets = linkedIssuesCount + mentionedTicketsCount;
+```
+
+---
+
 ### Step 3: Create ticket.md File
 
 **CRITICAL**: Create comprehensive ticket.md file for downstream agents (triage agent will read this instead of calling Jira again)
@@ -343,6 +489,51 @@ Check the following:
 
 ---
 
+## 🔗 Related Tickets
+
+### Linked Issues ({linkedIssuesCount})
+
+{if linked issues exist, for each:}
+#### {linkType}: {linkedIssue.key} - {linkedIssue.summary}
+
+- **Status**: {linkedIssue.status}
+- **Type**: {linkedIssue.type}
+- **Priority**: {linkedIssue.priority}
+- **Relationship**: {linkedIssue.relationship}
+- **Link**: https://your-jira-instance.atlassian.net/browse/{linkedIssue.key}
+
+---
+
+{if no linked issues: "No formally linked issues found."}
+
+### Mentioned Tickets ({mentionedTicketsCount})
+
+{if mentioned tickets exist, for each:}
+#### {mentionedTicket.key} - {mentionedTicket.summary}
+
+- **Status**: {mentionedTicket.status}
+- **Type**: {mentionedTicket.type}
+- **Priority**: {mentionedTicket.priority}
+- **Mentioned In**: {mentionedTicket.mentionedIn}
+- **Context**: "{mentionedTicket.mentionContext}"
+- **Link**: https://your-jira-instance.atlassian.net/browse/{mentionedTicket.key}
+
+---
+
+{if no mentions: "No ticket mentions found in description or comments."}
+
+### Summary
+
+- **Total Related Tickets**: {totalRelatedTickets}
+  - Formally Linked: {linkedIssuesCount}
+  - Mentioned in Text: {mentionedTicketsCount}
+
+💡 **Note for Orchestrator**:
+If triage analysis feels insufficient, consider analyzing these related tickets for additional context.
+Use vision agent to analyze images from relevant linked/mentioned issues if needed.
+
+---
+
 *This file was generated by hive-jira-validation-agent for use by downstream agents*
 ```
 
@@ -359,13 +550,39 @@ Provide your validation result in this EXACT JSON format:
   "ticketId": "string",
   "ticketType": "string",
   "isValidType": true | false,
+  "warningMessage": "string (only if isValidType is false - non-bug ticket warning)",
   "hasAttachments": true | false,
   "totalAttachments": 0,
   "imageAttachments": 0,
   "imageFiles": ["filename1.png", "filename2.jpg"],
+  "linkedIssues": [
+    {
+      "key": "PROJ-123",
+      "summary": "Issue summary",
+      "status": "Open",
+      "type": "Bug",
+      "priority": "High",
+      "linkType": "Blocks",
+      "relationship": "is blocked by"
+    }
+  ],
+  "linkedIssuesCount": 0,
+  "mentionedTickets": [
+    {
+      "key": "PROJ-456",
+      "summary": "Mentioned issue summary",
+      "status": "Done",
+      "type": "Task",
+      "priority": "Medium",
+      "mentionedIn": "description, comment-2",
+      "mentionContext": "...related to PROJ-456 where we changed..."
+    }
+  ],
+  "mentionedTicketsCount": 0,
+  "totalRelatedTickets": 0,
   "ticketFileCreated": true | false,
   "ticketFilePath": ".hive/reports/{ticketId}/ticket.md",
-  "errorMessage": "string (only if error)"
+  "errorMessage": "string (only if validationStatus is error - ticket not found)"
 }
 ```
 
@@ -436,24 +653,28 @@ Provide your validation result in this EXACT JSON format:
 }
 ```
 
-### Error Case (Wrong Type):
+### Warning Case (Non-Bug Type):
+
+**IMPORTANT**: Do NOT return error for non-bug tickets. Return success with warning instead.
 
 ```json
 {
-  "validationStatus": "error",
+  "validationStatus": "success",
   "ticketExists": true,
   "ticketId": "PROJ-789",
   "ticketType": "Story",
   "isValidType": false,
-  "hasAttachments": false,
-  "totalAttachments": 0,
-  "imageAttachments": 0,
-  "imageFiles": [],
-  "ticketFileCreated": false,
-  "ticketFilePath": ".hive/reports/PROJ-789/ticket.md",
-  "errorMessage": "Ticket PROJ-789 is type 'Story', not 'Bug'. Triage only supports Bug tickets."
+  "warningMessage": "This is a Story ticket, not a Bug. Hive is optimized for Bug analysis. Results may be less optimal for non-bug tickets.",
+  "hasAttachments": true,
+  "totalAttachments": 2,
+  "imageAttachments": 1,
+  "imageFiles": ["mockup.png"],
+  "ticketFileCreated": true,
+  "ticketFilePath": ".hive/reports/PROJ-789/ticket.md"
 }
 ```
+
+**Rationale**: User will be prompted to confirm if they want to proceed with non-bug ticket analysis. Don't block the workflow here - let the orchestrator handle user interaction.
 
 ## ⚠️ Important Guidelines
 
